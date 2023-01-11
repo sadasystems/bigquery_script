@@ -45,14 +45,3 @@ LOOP
   END IF;
   SET MINROWID = MINROWID + 1;
 END LOOP;
-
-
-
-
-select schema_name from backup.snap_schema_list where id=1;
-
-select * from backup.snap_tablelist_to_snapshot where table_schema='btreporting_dimension'
-
-select * from backup.snap_schema_list;
-
-select * from backup.snap_tablelist_to_snapshot where table_schema='btreporting_diamension'
