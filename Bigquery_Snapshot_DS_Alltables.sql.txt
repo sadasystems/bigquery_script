@@ -1,0 +1,58 @@
+DECLARE MINROWID INT64 DEFAULT 1;
+DECLARE MAXROWID INT64 ;
+DECLARE schema_name string;
+DECLARE tablename string;
+DECLARE query string;
+DECLARE snapshot_name string;
+--Find all the schema in the project to take snashot.
+CREATE OR REPLACE  TABLE backup.snap_schema_list 
+( id INT64 ,schema_name string);
+INSERT INTO backup.snap_schema_list
+select ROW_NUMBER() over (Order by schema_name asc),schema_name from region-us.INFORMATION_SCHEMA.SCHEMATA where  schema_name not in ('backup');
+--Find all the tables in the schema within the snap_schema_list table to take snapshot. 
+CREATE OR REPLACE  TABLE backup.snap_tablelist 
+( table_schema string ,tablename string);
+--List All the table to backup in each schema
+SET MINROWID=1;
+SET MAXROWID=(select max(ID) from backup.snap_schema_list);
+LOOP  
+  SET schema_name= (select schema_name from backup.snap_schema_list where id=MINROWID);
+  SET query= CONCAT("INSERT INTO backup.snap_tablelist  " ," select  table_schema,table_name from " ,schema_name,".INFORMATION_SCHEMA.TABLES where table_type ='BASE TABLE'");
+  EXECUTE IMMEDIATE query;
+  IF MINROWID >= MAXROWID THEN
+    BREAK;
+  END IF;
+  SET MINROWID = MINROWID + 1;
+END LOOP;
+----
+--Find Table to 
+CREATE OR REPLACE  TABLE backup.snap_tablelist_to_snapshot 
+( id int64, table_schema string ,tablename string);
+INSERT INTO backup.snap_tablelist_to_snapshot
+select ROW_NUMBER() over (Order by table_schema ,tablename asc),table_schema,tablename from `backup.snap_tablelist` ;
+SET MINROWID=1;
+SET MAXROWID=(select MAX(id) from backup.snap_tablelist_to_snapshot); 
+LOOP  
+  SET tablename= (select tablename from backup.snap_tablelist_to_snapshot where id=MINROWID);
+  SET schema_name=(select table_schema from backup.snap_tablelist_to_snapshot where id=MINROWID);
+  SET snapshot_name=CONCAT("backup.", schema_name,"_",tablename,"_",format_timestamp('%Y%m%d%H%M%S',current_timestamp()));
+  Set query=CONCAT( "CREATE SNAPSHOT TABLE ",
+    snapshot_name," CLONE ",schema_name,".",tablename , " OPTIONS(expiration_timestamp=TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 3 DAY))");
+    --select query;    
+   EXECUTE IMMEDIATE query;
+  IF MINROWID >= MAXROWID THEN
+    BREAK;
+  END IF;
+  SET MINROWID = MINROWID + 1;
+END LOOP;
+
+
+
+
+select schema_name from backup.snap_schema_list where id=1;
+
+select * from backup.snap_tablelist_to_snapshot where table_schema='btreporting_dimension'
+
+select * from backup.snap_schema_list;
+
+select * from backup.snap_tablelist_to_snapshot where table_schema='btreporting_diamension'
